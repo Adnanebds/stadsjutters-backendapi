@@ -1,9 +1,13 @@
-const mysql = require('mysql2');
+const mysql = require('mysql2/promise');
 const express = require('express');
 const bodyParser = require('body-parser');
+const path = require('path');
 
 const app = express();
-app.use(bodyParser.json())
+
+// Middleware setup
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -11,29 +15,40 @@ app.use((req, res, next) => {
   next();
 });
 
-// Create a connection to the database
-const connection = mysql.createConnection({
+// Create a connection pool to the database
+const pool = mysql.createPool({
   host: 'localhost',
   user: 'root',
   password: '',
-  database: 'circulocostadjutter'
-}).promise(); // Convert to promise-based connection immediately
+  database: 'circulocostadjutter',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
 
-// Connect to the database
-connection.connect()
+// Connect to the database and log success or error
+pool.getConnection()
   .then(() => console.log('Connected to the MySQL database!'))
   .catch((err) => console.error('Error connecting to the database:', err.message));
 
-// Export the connection promise for use in other files
-module.exports = connection;
+// Export the connection pool for use in other files
+module.exports = pool;
 
 // Import routes after exporting the connection
 const userRoutes = require('./routes/userRoute');
+const userSpots = require('./routes/userSpot');
 
 // Server setup
-const PORT = 4000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
 
-app.use('/api', userRoutes);  // Use the routes
+// Set server timeout
+app.timeout = 120000; // 2 minutes
+
+app.use('/api', userRoutes); // Use user routes
+app.use('/api', userSpots); // Use spot routes
+
+// Serve static files from the uploads directory
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
