@@ -1,60 +1,63 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../server'); // Ensure this imports the pool
-
+const db = require('../server');
 const multer = require('multer');
 const path = require('path');
 
-// Configure multer for handling file uploads
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, 'uploads/'); // Ensure this folder exists
+        cb(null, 'uploads/');
     },
     filename: function (req, file, cb) {
-        cb(null, Date.now() + path.extname(file.originalname)); // Append timestamp to avoid filename collisions
+        cb(null, Date.now() + path.extname(file.originalname));
     }
 });
 
 const upload = multer({ storage: storage });
-
 router.post('/spot', upload.single('photo'), async (req, res) => {
-    console.log('Received data:', req.body);
-
     const { title, description, latitude, longitude, status, expiryDate, category, userId } = req.body;
-    const photoPath = req.file ? req.file.path : null; // Store the path to the uploaded file
-
-    if (!title) {
-        return res.status(400).json({ error: 'Title is required' });
-    }
-
-    if (!userId) {
-        return res.status(400).json({ error: 'User ID is required' });
-    }
-
+    const photoUrl = req.file ? req.file.filename : null;
+  
     try {
-        const query = `
-            INSERT INTO material (title, Photo, Description, Latitude, Longitude, Status, CreatedAt, ExpiryDate, UserID, category)
-            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(), ?, ?, ?)
-        `;
-        
-        const [result] = await db.query(query, [title, photoPath, description, latitude, longitude, status, expiryDate, userId, category]);
-
-        res.status(201).json({ message: 'Spot created successfully', materialId: result.insertId });
+      const query = `
+        INSERT INTO material (title, Photo, Description, Latitude, Longitude, Status, CreatedAt, ExpiryDate, UserID, category)
+        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(), ?, ?, ?)
+      `;
+      
+      const [result] = await db.query(query, [title, photoUrl, description, latitude, longitude, status, expiryDate, userId, category]);
+  
+      res.status(201).json({ message: 'Spot created successfully', materialId: result.insertId });
     } catch (err) {
-        console.error('Database error:', err);
-        res.status(500).json({ error: err.message });
+      console.error('Database error:', err);
+      res.status(500).json({ error: err.message });
     }
-});
+  });
+  
 
-// Get all spots
 router.get('/spot', async (req, res) => {
     const query = 'SELECT * FROM material';
     try {
-        const [results] = await db.query(query);
-        res.json(results);
+      const [results] = await db.query(query);
+      const processedResults = results.map(item => ({
+        ...item,
+        Photo: item.Photo ? `${req.protocol}://${req.get('host')}/uploads/${item.Photo}` : null
+      }));
+      res.json(processedResults);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+  
+
+router.get('/category', async (req, res) => {
+    try {
+        const [rows] = await db.query('SHOW COLUMNS FROM material LIKE "category"');
+        const enumValues = rows[0].Type.match(/enum\((.*)\)/)[1].split(',').map(value => value.replace(/'/g, ''));
+        res.json(enumValues);
+    } catch (error) {
+        console.error('Error fetching enum values:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
-module.exports = router; // Export the router instance
+module.exports = router;
