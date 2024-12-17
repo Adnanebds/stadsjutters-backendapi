@@ -1,0 +1,63 @@
+const express = require('express');
+const router = express.Router();
+const db = require('../server'); // Import the database connection
+
+// Get all messages
+router.get('/messages', async (req, res) => {
+    const query = 'SELECT * FROM message';  // Change this if your table structure is different
+
+    try {
+        const [results] = await db.query(query);
+        res.json(results);  // Send the results back to the client
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get messages for a specific user
+router.get('/messages/:userId', async (req, res) => {
+    const query = 'SELECT * FROM message WHERE userId = ?';
+
+    try {
+        const [results] = await db.query(query, [req.params.userId]);
+        res.json(results);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Send a new message
+router.post('/messages', async (req, res) => {
+    const { sender, text, userId } = req.body;
+
+    // Validate input
+    if (!sender || !text || !userId) {
+        return res.status(400).json({ error: 'Missing required fields: sender, text, userId' });
+    }
+
+    const query = 'INSERT INTO message (sender, text, userId) VALUES (?, ?, ?)';
+
+    try {
+        const [result] = await db.query(query, [sender, text, userId]);
+        res.status(201).json({ message: 'Message sent', messageId: result.insertId });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Delete a message
+router.delete('/messages/:id', async (req, res) => {
+    const query = 'DELETE FROM message WHERE MessageID = ?';
+
+    try {
+        const [result] = await db.query(query, [req.params.id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Message not found' });
+        }
+        res.json({ message: 'Message deleted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+module.exports = router;  // Export the router
