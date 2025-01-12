@@ -38,7 +38,8 @@ module.exports = pool;
 const userRoutes = require('./routes/userRoute');
 const userSpots = require('./routes/userSpot');
 const chatRoute = require('./routes/chatRoute')
-
+const postNotification = require('./routes/NotificationRoute')
+const pushToken = require('./routes/pushToken')
 // Server setup
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
@@ -51,6 +52,8 @@ app.timeout = 120000; // 2 minutes
 app.use('/api', userRoutes); // Use user routes
 app.use('/api', userSpots);
 app.use('/api', chatRoute); // Use spot routes
+app.use('/api', postNotification);
+app.use('/api', pushToken);
 
 // Serve static files from the uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

@@ -1,0 +1,64 @@
+const db = require('../server'); // Import the database connection
+const { Expo } = require('expo-server-sdk');
+const expo = new Expo();
+const express = require('express');
+const router = express.Router();
+
+
+router.post('/post-notification', async (req, res) => {
+  const { materialId } = req.body;
+
+  if (!materialId) {
+    return res.status(400).json({ error: 'Material ID is required' });
+  }
+
+  try {
+    // Step 1: Update the spot status in the database
+    const query = 'UPDATE material SET Status = "picked_up" WHERE MaterialID = ?';
+    const [result] = await db.query(query, [materialId]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Spot not found or already picked up' });
+    }
+
+    // Step 2: Fetch the user associated with this spot
+    const getUserQuery = 'SELECT UserID FROM material WHERE MaterialID = ?';
+    const [spotResult] = await db.query(getUserQuery, [materialId]);
+    const userId = spotResult[0].UserID;
+
+    // Step 3: Get the pushToken of the user who created the spot
+    const getUserTokenQuery = 'SELECT pushToken FROM user WHERE UserID = ?';
+    const [userResult] = await db.query(getUserTokenQuery, [userId]);
+
+    if (userResult.length === 0 || !userResult[0].pushToken) {
+      return res.status(404).json({ error: 'User not found or push token missing' });
+    }
+
+    const pushToken = userResult[0].pushToken;
+
+    // Step 4: Create the push notification message
+    const message = {
+      to: pushToken,
+      sound: 'default',
+      title: 'Spot Picked Up',
+      body: `The spot with ID ${materialId} has been picked up.`,
+    };
+
+    // Step 5: Send the push notification using Expo's SDK
+    const { data, errors } = await expo.sendPushNotificationsAsync([message]);
+
+    if (errors) {
+      console.error('Error sending notification:', errors);
+      return res.status(500).json({ error: 'Error sending notification', details: errors });
+    }
+
+    // Step 6: Respond to the client
+    res.status(200).json({ message: 'Spot marked as picked up and notification sent' });
+  } catch (err) {
+    console.error('Database error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+module.exports = router; 

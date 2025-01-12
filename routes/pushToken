@@ -1,0 +1,42 @@
+const express = require('express');
+const db = require('../server');  // Database connection
+const { Expo } = require('expo-server-sdk');
+const expo = new Expo();
+const router = express.Router();
+
+// Function to update push token in the database
+const updatePushToken = async (userId, token) => {
+  try {
+    const query = 'UPDATE user SET pushToken = ? WHERE UserID = ?';
+    const [result] = await db.query(query, [token, userId]);
+
+    if (result.affectedRows > 0) {
+      console.log('Push token updated successfully');
+    } else {
+      console.log('No changes to update');
+    }
+  } catch (err) {
+    console.error('Error updating push token:', err);
+  }
+};
+
+// Route handler to store the push token
+router.post('/push-token', async (req, res) => {
+  const { userId, pushToken } = req.body;
+
+  if (!userId || !pushToken) {
+    return res.status(400).json({ error: 'User ID and Push Token are required' });
+  }
+
+  try {
+    // Call the updatePushToken function to store/update the token
+    await updatePushToken(userId, pushToken);
+
+    res.status(200).json({ message: 'Push token stored successfully' });
+  } catch (error) {
+    console.error('Error in storing push token:', error);
+    res.status(500).json({ error: 'Failed to store push token' });
+  }
+});
+
+module.exports = router;
