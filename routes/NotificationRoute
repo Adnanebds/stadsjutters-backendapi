@@ -3,39 +3,47 @@ const { Expo } = require('expo-server-sdk');
 const expo = new Expo();
 const express = require('express');
 const router = express.Router();
-
-
+ 
 router.post('/post-notification', async (req, res) => {
   const { materialId } = req.body;
-
+ 
   if (!materialId) {
+    console.log('Error: Material ID is missing');
     return res.status(400).json({ error: 'Material ID is required' });
   }
-
+ 
   try {
+    console.log(`Attempting to update status for materialId: ${materialId}`);
+ 
     // Step 1: Update the spot status in the database
     const query = 'UPDATE material SET Status = "picked_up" WHERE MaterialID = ?';
     const [result] = await db.query(query, [materialId]);
-
+ 
     if (result.affectedRows === 0) {
+      console.log(`Spot with MaterialID ${materialId} not found or already picked up`);
       return res.status(404).json({ error: 'Spot not found or already picked up' });
     }
-
+ 
+    console.log(`Successfully updated status for MaterialID: ${materialId}`);
+ 
     // Step 2: Fetch the user associated with this spot
     const getUserQuery = 'SELECT UserID FROM material WHERE MaterialID = ?';
     const [spotResult] = await db.query(getUserQuery, [materialId]);
     const userId = spotResult[0].UserID;
-
+    console.log(`UserID for MaterialID ${materialId}: ${userId}`);
+ 
     // Step 3: Get the pushToken of the user who created the spot
     const getUserTokenQuery = 'SELECT pushToken FROM user WHERE UserID = ?';
     const [userResult] = await db.query(getUserTokenQuery, [userId]);
-
+ 
     if (userResult.length === 0 || !userResult[0].pushToken) {
+      console.log(`No pushToken found for UserID ${userId}`);
       return res.status(404).json({ error: 'User not found or push token missing' });
     }
-
+ 
     const pushToken = userResult[0].pushToken;
-
+    console.log(`Push token found for UserID ${userId}: ${pushToken}`);
+ 
     // Step 4: Create the push notification message
     const message = {
       to: pushToken,
@@ -43,15 +51,32 @@ router.post('/post-notification', async (req, res) => {
       title: 'Spot Picked Up',
       body: `The spot with ID ${materialId} has been picked up.`,
     };
-
-    // Step 5: Send the push notification using Expo's SDK
-    const { data, errors } = await expo.sendPushNotificationsAsync([message]);
-
-    if (errors) {
-      console.error('Error sending notification:', errors);
-      return res.status(500).json({ error: 'Error sending notification', details: errors });
-    }
-
+    console.log(`Push message created for MaterialID ${materialId}:`, message);
+ 
+ // Step 5: Send the push notification using Expo's SDK
+console.log(`Sending push notification to ${pushToken}...`);
+ 
+try {
+  const { data, errors } = await expo.sendPushNotificationsAsync([message]);
+ 
+  if (errors && errors.length > 0) {
+    console.error('Error sending notification:', errors);
+    return res.status(500).json({ error: 'Error sending notification', details: errors });
+  }
+ 
+  console.log('Push notification sent successfully:', data);
+ 
+  // If data contains success responses for notifications, you can optionally send this back to the client
+  res.status(200).json({
+    message: 'Spot marked as picked up and notification sent',
+    notificationResponse: data
+  });
+} catch (err) {
+  console.error('Error during sending notification:', err);
+  res.status(500).json({ error: 'Failed to send notification', details: err.message });
+}
+ 
+ 
     // Step 6: Respond to the client
     res.status(200).json({ message: 'Spot marked as picked up and notification sent' });
   } catch (err) {
@@ -59,6 +84,5 @@ router.post('/post-notification', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-
-module.exports = router; 
+ 
+module.exports = router;

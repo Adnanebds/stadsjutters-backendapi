@@ -4,11 +4,11 @@ const db = require('../server'); // Import the database connection
 
 // Get all messages
 router.get('/messages', async (req, res) => {
-    const query = 'SELECT * FROM message';  // Change this if your table structure is different
+    const query = 'SELECT * FROM message'; 
 
     try {
         const [results] = await db.query(query);
-        res.json(results);  // Send the results back to the client
+        res.json(results); 
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -16,10 +16,15 @@ router.get('/messages', async (req, res) => {
 
 // Get messages for a specific user
 router.get('/messages/:userId', async (req, res) => {
-    const query = 'SELECT * FROM message WHERE userId = ?';
+    const query = `
+        SELECT * 
+        FROM message 
+        WHERE SenderID = ? OR ReceiverID = ? 
+        ORDER BY SentAt DESC
+    `;
 
     try {
-        const [results] = await db.query(query, [req.params.userId]);
+        const [results] = await db.query(query, [req.params.userId, req.params.userId]);
         res.json(results);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -32,15 +37,19 @@ router.post('/messages', async (req, res) => {
 
     // Validate input
     if (!sender || !text || !userId) {
+        console.log("Validation Failed", req.body);
         return res.status(400).json({ error: 'Missing required fields: sender, text, userId' });
     }
 
-    const query = 'INSERT INTO message (sender, text, userId) VALUES (?, ?, ?)';
+    const query = 'INSERT INTO message (SenderID, MessageText, ReceiverID) VALUES (?, ?, ?)';
 
     try {
+        console.log("Query Parameters:", sender, text, userId);
         const [result] = await db.query(query, [sender, text, userId]);
+        console.log("Query Result:", result);
         res.status(201).json({ message: 'Message sent', messageId: result.insertId });
     } catch (err) {
+        console.error("Database Error:", err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -60,4 +69,4 @@ router.delete('/messages/:id', async (req, res) => {
     }
 });
 
-module.exports = router;  // Export the router
+module.exports = router; 
